@@ -15,11 +15,21 @@ class TasksController extends Controller
      */
     public function index()
     {
-        // タスク一覧を取得
-        $tasks = Task::all();
+        $data = [];
+        if (\Auth::check()) { // 認証済みの場合
+            // 認証済みユーザを取得
+            $user = \Auth::user();
+            // ユーザの投稿の一覧を作成日時の降順で取得
+            $tasks = $user->tasks()->orderBy('created_at', 'desc')->paginate(10);
+
+            $data = [
+                'user' => $user,
+                'tasks' => $tasks,
+            ];
+        }
         
-        // メッセージ一覧ビューでそれを表示
-        return view('tasks.index', ['tasks' => $tasks, ]);
+         // Welcomeビューでそれらを表示
+         return view('welcome',$data);
     }
 
     /**
@@ -52,11 +62,11 @@ class TasksController extends Controller
             'status' => 'required|max:10',
         ]);
         
-        // メッセージを作成
-        $task = new Task;
-        $task->status = $request->status;
-        $task->content = $request->content;
-        $task->save();
+        // 認証済みユーザ（閲覧者）の投稿として作成（リクエストされた値をもとに作成）
+        $request->user()->tasks()->create([
+            'content' => $request->content,
+            'status' => $request->status
+        ]);
         
         // トップページへリダイレクト
         return redirect('/');
@@ -70,12 +80,19 @@ class TasksController extends Controller
      */
     public function show($id)
     {
-        // idの値でメッセージを検索して取得
+        //$taskを定義する
         $task = Task::findOrFail($id);
+        // getアクセスを送った閲覧者が、そのタスクの所有者である場合は
+        if (\Auth::id() === $task->user_id) {
         
-        // メッセージ詳細ビューでそれを表示
-        return view('tasks.show', ['task' => $task,
-        ]);
+            // メッセージ詳細ビューでそれを表示
+            return view('tasks.show', [
+                'task' => $task,
+            ]);
+        
+        } else {
+            return redirect('/');
+        }
     }
 
     /**
@@ -86,14 +103,22 @@ class TasksController extends Controller
      */
     public function edit($id)
     {
-        
-        // idの値タスクを検索して取得
+        // $taskを定義する
         $task = Task::findOrFail($id);
+        if(\Auth::id() === $task->user_id) {
+            // idの値タスクを検索して取得
+            $task = Task::findOrFail($id);
         
-        // タスク編集ビューでそれを表示
-         return view('tasks.edit', [
-            'task' => $task,
+            // タスク編集ビューでそれを表示
+            return view('tasks.edit', [
+                'task' => $task,
         ]);
+        } else {
+            return redirect('/');
+        }
+        
+        
+        
     }
 
     /**
@@ -131,12 +156,22 @@ class TasksController extends Controller
      * @return \Illuminate\Http\Response
      */
     public function destroy($id)
-    {
-        // idの値でタスクを検索して取得
+    {   
+        //$taskを定義する
         $task = Task::findOrFail($id);
-        // タスクを削除
-        $task->delete();
         
-        return redirect('/');
+        //閲覧者のidが$taskのuser_idと同一なら
+        if(\Auth::id() === $task->user_id) {
+            // タスクを削除
+            $task->delete();
+        
+        return redirect('/');   
+            
+        } else {
+          return redirect('/');  
+        }
+        
+        
+        
     }
 }
